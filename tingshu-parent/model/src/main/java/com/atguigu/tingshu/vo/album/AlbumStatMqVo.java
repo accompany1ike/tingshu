@@ -3,9 +3,13 @@ package com.atguigu.tingshu.vo.album;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 
+import java.io.Serializable;
+
 @Data
 @Schema(description = "AlbumStatMqVo")
-public class AlbumStatMqVo {
+public class AlbumStatMqVo implements Serializable {
+
+	private static final long serialVersionUID = 1L;
 
 	@Schema(description = "业务编号：去重使用")
 	private String businessNo;

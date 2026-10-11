@@ -4,6 +4,34 @@
 
 <mapper namespace="com.atguigu.tingshu.album.mapper.TrackInfoMapper">
 
+    <!--
+      专辑详情页的声音列表。
+      声音统计（track_stat）是按 stat_type 一行一条存的，这里 join 两次把播放量(0701)、
+      评论数(0704)摊平成列，避免查出声音后再逐条回查统计。
+      排序按 order_num 正序，并以 id 兜底：同一专辑内 order_num 理论上唯一，
+      但万一有重复，id 兜底能保证分页翻页时顺序稳定、不会出现记录重复或漏掉。
+    -->
+    <select id="selectAlbumTrackPage" resultType="com.atguigu.tingshu.vo.album.AlbumTrackListVo">
+        select ti.id                          as trackId,
+               ti.track_title                 as trackTitle,
+               ti.media_duration              as mediaDuration,
+               ti.order_num                   as orderNum,
+               ti.create_time                 as createTime,
+               ifnull(ts_play.stat_num, 0)    as playStatNum,
+               ifnull(ts_comment.stat_num, 0) as commentStatNum,
+               ifnull(ts_comment.stat_num, 0) as albumCommentStatNum
+        from track_info ti
+                 left join track_stat ts_play
+                           on ts_play.track_id = ti.id
+                               and ts_play.stat_type = '0701'
+                               and ts_play.is_deleted = 0
+                 left join track_stat ts_comment
+                           on ts_comment.track_id = ti.id
+                               and ts_comment.stat_type = '0704'
+                               and ts_comment.is_deleted = 0
+        where ti.album_id = #{albumId}
+          and ti.is_deleted = 0
+        order by ti.order_num asc, ti.id asc
+    </select>
 
 </mapper>
-

@@ -4,6 +4,8 @@ import com.atguigu.tingshu.model.album.AlbumInfo;
 import com.atguigu.tingshu.query.album.AlbumInfoQuery;
 import com.atguigu.tingshu.vo.album.AlbumInfoVo;
 import com.atguigu.tingshu.vo.album.AlbumListVo;
+import com.atguigu.tingshu.vo.album.AlbumStatMqVo;
+import com.atguigu.tingshu.vo.album.AlbumStatVo;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.IService;
 
@@ -80,5 +82,61 @@ public interface AlbumInfoService extends IService<AlbumInfo> {
      * @param albumInfoVo 专辑信息
      */
     void updateAlbumInfo(Long userId, Long albumId, AlbumInfoVo albumInfoVo);
+
+
+    /**
+     * 根据专辑ID查询专辑（服务内部调用）
+     * <p>
+     * 搜索模块构建索引、渲染专辑详情页都要用，所以不做登录与归属校验，
+     * 返回的 albumAttributeValueVoList 只带 attributeId 与 valueId（建索引只需要这两个值）
+     *
+     * @param albumId 专辑ID
+     * @return 专辑信息，专辑不存在时返回 null
+     */
+    AlbumInfo getAlbumInfoById(Long albumId);
+
+
+    /**
+     * 查询专辑统计信息（服务内部调用）
+     * <p>
+     * 把 album_stat 里的播放量、订阅量、购买量、评论数四行汇总成一个对象，缺失的统计项按 0 处理
+     *
+     * @param albumId 专辑ID
+     * @return 专辑统计信息
+     */
+    AlbumStatVo getAlbumStatVo(Long albumId);
+
+
+    /**
+     * 查询全部专辑ID（服务内部调用）
+     * <p>
+     * 搜索模块初始化索引时用它拿到需要建索引的专辑清单
+     *
+     * @return 专辑ID集合
+     */
+    List<Long> findAllAlbumIds();
+
+
+    /**
+     * 根据专辑ID集合批量查询专辑（服务内部调用）
+     * <p>
+     * 「我的-订阅」这类列表页一次要展示几十张专辑，逐条查会打出一串请求；
+     * 只查专辑本体，不带标签集合
+     *
+     * @param albumIdList 专辑ID集合
+     * @return 专辑集合，入参为空时返回空集合
+     */
+    List<AlbumInfo> findAlbumInfoByIds(List<Long> albumIdList);
+
+
+    /**
+     * 更新专辑统计信息（MQ 消费者调用）
+     * <p>
+     * 按 statType 对 album_stat 里对应的那一行做增量累加：专辑播放量、订阅量、
+     * 购买量、评论数的变更都走这一个入口。统计行不存在时补插一条，避免老数据丢计数
+     *
+     * @param albumStatMqVo 统计变更消息（专辑ID、统计类型、增量）
+     */
+    void updateAlbumStat(AlbumStatMqVo albumStatMqVo);
 
 }

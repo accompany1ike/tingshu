@@ -54,6 +54,18 @@
 - 保存声音、分页列表、详情、编辑、删除
 - 新增 / 删除时自动维护专辑的 `include_track_count` 集数
 
+**搜索（ES）**
+- 索引维护：专辑新增 / 编辑 / 删除、专辑下声音数量变化时，专辑模块通过 MQ（`tingshu.album` 交换机）通知搜索模块重建或删除索引
+- 索引库 `albuminfo` 字段类型：`albumTitle`、`albumIntro` 用 text + ik 分词（建索引用 `ik_max_word`、检索用 `ik_smart`）；
+  `announcerName`、`payType` 等精确值用 keyword；分类 ID、统计数、`hotScore` 用数值型；专辑标签 `attributeValueIndexList` 用 nested
+- 检索 `POST /api/search/albumInfo`：关键字（标题权重 3、简介，主播名称精确匹配）、一/二/三级分类、专辑标签
+  （`attributeList` 传 `标签id:标签值id`，nested 查询保证标签与标签值配对）过滤，综合（热度）/ 播放量 / 发布时间排序，支持分页
+- 搜索建议 `GET /api/search/albumInfo/completeSuggest/{keyword}`：中文、全拼、拼音首字母三种输入都能联想
+- 频道页 `GET /api/search/albumInfo/channel/{category1Id}`：一次 terms + top_hits 聚合查出「三级分类 + 该分类下热门专辑」的分段数据
+- 排行榜 `GET /api/search/albumInfo/findRankingList/{category1Id}/{dimension}`：取一级分类下指定维度前 10
+- 专辑详情 `GET /api/search/albumInfo/{albumId}`：布隆过滤器挡穿透 + Redis 缓存 + Redisson 分布式锁，聚合专辑、分类、统计、主播信息
+- 索引初始化：启动时按实体注解建索引（`EsIndexInitializer`），`POST /api/search/albumInfo/initAlbumIndex` 可全量重建
+
 **用户与登录**
 - 微信小程序登录：`code` 换 openid，用户不存在则自动注册，签发 token
 - 登录态存 Redis，`@GuiGuLogin` 切面统一拦截未登录请求（响应 208）

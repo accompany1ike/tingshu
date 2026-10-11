@@ -25,7 +25,17 @@ public class AlbumTrackListVo {
 	@Schema(description = "播放量")
 	private Integer playStatNum;
 
+	/**
+	 * 页面（专辑详情页声音列表）实际读取的就是这个字段
+	 */
 	@Schema(description = "评论数")
+	private Integer commentStatNum;
+
+	/**
+	 * 历史遗留字段名，全项目没有任何调用方使用；保留只为避免影响未知的旧引用，
+	 * 服务端会与 commentStatNum 填相同的值，新代码请直接用 commentStatNum
+	 */
+	@Schema(description = "评论数（历史遗留字段，等同 commentStatNum）")
 	private Integer albumCommentStatNum;
 
 	@Schema(description = "发布时间")

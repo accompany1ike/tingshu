@@ -4,6 +4,8 @@ import com.alibaba.fastjson.JSONObject;
 import com.atguigu.tingshu.album.service.BaseCategoryService;
 import com.atguigu.tingshu.common.result.Result;
 import com.atguigu.tingshu.model.album.BaseAttribute;
+import com.atguigu.tingshu.model.album.BaseCategory3;
+import com.atguigu.tingshu.model.album.BaseCategoryView;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -51,6 +53,34 @@ public class BaseCategoryApiController {
 	public Result<List<BaseAttribute>> getAttributesByCategory1Id(@PathVariable Long category1Id) {
 		List<BaseAttribute> list = baseCategoryService.getAttributesByCategory1Id(category1Id);
 		return Result.ok(list);
+	}
+
+
+	/**
+	 * 根据一级分类Id查询置顶的三级分类列表
+	 * 首页频道页的「二级分类快捷入口」用它渲染，搜索模块组织频道页数据时也用它补齐分类名称
+	 *
+	 * @param category1Id 一级分类ID
+	 * @return 三级分类集合
+	 */
+	@Operation(summary = "根据一级分类Id查询置顶的三级分类列表")
+	@GetMapping("/category/findTopBaseCategory3/{category1Id}")
+	public Result<List<BaseCategory3>> findTopBaseCategory3(@PathVariable Long category1Id) {
+		return Result.ok(baseCategoryService.findTopBaseCategory3(category1Id));
+	}
+
+
+	/**
+	 * 根据三级分类Id查询一、二、三级分类信息（服务内部调用）
+	 * 专辑详情页展示分类、搜索模块建索引时确定一二级分类ID，都用这个接口
+	 *
+	 * @param category3Id 三级分类ID
+	 * @return 分类视图
+	 */
+	@Operation(summary = "根据三级分类Id查询分类信息（服务内部调用）")
+	@GetMapping("/category/getBaseCategoryView/{category3Id}")
+	public Result<BaseCategoryView> getBaseCategoryView(@PathVariable Long category3Id) {
+		return Result.ok(baseCategoryService.getBaseCategoryView(category3Id));
 	}
 
 }

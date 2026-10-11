@@ -36,6 +36,15 @@ public class AlbumInfoIndexVo {
     @Schema(description = "专辑创建时间")
     private Date createTime; //
 
+    @Schema(description = "一级分类ID")
+    private Long category1Id;
+
+    @Schema(description = "二级分类ID")
+    private Long category2Id;
+
+    @Schema(description = "三级分类ID")
+    private Long category3Id;
+
     //播放量
     @Schema(description = "播放量")
     private Integer playStatNum = 0;

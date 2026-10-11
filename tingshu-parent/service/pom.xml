@@ -16,6 +16,7 @@
         <module>service-album</module>
         <module>service-search</module>
         <module>service-account</module>
+        <module>service-comment</module>
         <module>service-dispatch</module>
         <module>service-order</module>
         <module>service-payment</module>

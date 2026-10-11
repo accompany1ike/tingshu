@@ -8,6 +8,7 @@ import com.atguigu.tingshu.model.album.AlbumInfo;
 import com.atguigu.tingshu.query.album.AlbumInfoQuery;
 import com.atguigu.tingshu.vo.album.AlbumInfoVo;
 import com.atguigu.tingshu.vo.album.AlbumListVo;
+import com.atguigu.tingshu.vo.album.AlbumStatVo;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -136,6 +137,62 @@ public class AlbumInfoApiController {
 	public Result removeAlbumInfo(@PathVariable Long albumId) {
 		albumInfoService.removeAlbumInfo(AuthContextHolder.getUserId(), albumId);
 		return Result.ok();
+	}
+
+
+	/**
+	 * 根据专辑ID查询专辑（服务内部调用，搜索模块使用）
+	 * <p>
+	 * 不加登录校验：搜索模块建索引、渲染专辑详情时并没有用户登录态；
+	 * 返回的标签集合只带 attributeId 与 valueId，专辑不存在时 data 为 null
+	 *
+	 * @param albumId 专辑ID
+	 * @return 专辑信息
+	 */
+	@Operation(summary = "根据专辑ID查询专辑（服务内部调用）")
+	@GetMapping("/albumInfo/getAlbumInfoById/{albumId}")
+	public Result<AlbumInfo> getAlbumInfoById(@PathVariable Long albumId) {
+		return Result.ok(albumInfoService.getAlbumInfoById(albumId));
+	}
+
+
+	/**
+	 * 根据专辑ID集合批量查询专辑（服务内部调用，用户模块的订阅列表使用）
+	 * <p>
+	 * 不加登录校验：列表页一次要展示几十张专辑，逐条调会打出一串请求，这里一次查完
+	 *
+	 * @param albumIdList 专辑ID集合
+	 * @return 专辑集合
+	 */
+	@Operation(summary = "批量查询专辑（服务内部调用）")
+	@PostMapping("/albumInfo/findAlbumInfoByIds")
+	public Result<List<AlbumInfo>> findAlbumInfoByIds(@RequestBody List<Long> albumIdList) {
+		return Result.ok(albumInfoService.findAlbumInfoByIds(albumIdList));
+	}
+
+
+	/**
+	 * 查询专辑统计信息（服务内部调用，搜索模块使用）
+	 *
+	 * @param albumId 专辑ID
+	 * @return 专辑统计信息
+	 */
+	@Operation(summary = "查询专辑统计信息（服务内部调用）")
+	@GetMapping("/albumInfo/getAlbumStatVo/{albumId}")
+	public Result<AlbumStatVo> getAlbumStatVo(@PathVariable Long albumId) {
+		return Result.ok(albumInfoService.getAlbumStatVo(albumId));
+	}
+
+
+	/**
+	 * 查询全部专辑ID（服务内部调用，搜索模块初始化索引使用）
+	 *
+	 * @return 专辑ID集合
+	 */
+	@Operation(summary = "查询全部专辑ID（服务内部调用）")
+	@GetMapping("/albumInfo/findAllAlbumIds")
+	public Result<List<Long>> findAllAlbumIds() {
+		return Result.ok(albumInfoService.findAllAlbumIds());
 	}
 
 }

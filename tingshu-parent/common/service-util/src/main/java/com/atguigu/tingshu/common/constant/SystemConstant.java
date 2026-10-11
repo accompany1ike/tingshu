@@ -68,6 +68,11 @@ public class SystemConstant {
     public static final String  PAYMENT_STATUS_UNPAID="1401";  // 未支付
     public static final String  PAYMENT_STATUS_PAID="1402";  // 已支付
 
+    //充值状态 0901-未支付 0902-已支付 0903-已取消（与订单状态同码，但语义独立，不要混用）
+    public static final String  RECHARGE_STATUS_UNPAID="0901";  // 未支付
+    public static final String  RECHARGE_STATUS_PAID="0902";  // 已支付
+    public static final String  RECHARGE_STATUS_CANCEL="0903";  // 已取消
+
     //订单减免类型 1405-专辑折扣 1406-VIP服务折
     public static final String  ORDER_DERATE_ALBUM_DISCOUNT="1405";  // 专辑折扣
     public static final String  ORDER_DERATE_VIP_SERVICE_DISCOUNT="1406";  // VIP服务折扣

@@ -12,6 +12,16 @@ import java.io.Serializable;
 import java.util.Date;
 import java.util.List;
 
+/**
+ * 专辑索引库文档：albuminfo
+ * <p>
+ * 字段类型取舍（索引库一旦建好再改类型就得重建索引，所以这里定死）：
+ * 1.需要全文检索的字段用 text + ik 分词：albumTitle、albumIntro（能分词，但不能排序、聚合）；
+ * 2.需要精确等值、聚合、排序的字段用 keyword：announcerName、payType、coverUrl（不分词）；
+ * 3.分类ID、统计数、热度这些参与过滤与排序的用数值类型：long / integer / double；
+ * 4.专辑标签是一对多结构（attributeId + valueId），必须用 Nested，
+ * 否则 ES 会把同一个专辑的多个标签拍平成一个数组，出现「标签A的值 + 标签B的值」也能命中的错配。
+ */
 @Data
 @Document(indexName = "albuminfo")
 @JsonIgnoreProperties(ignoreUnknown = true)//目的：防止json字符串转成实体对象时因未识别字段报错
@@ -23,11 +33,12 @@ public class AlbumInfoIndex implements Serializable {
     @Id
     private Long id;
 
-    //  es 中能分词的字段，这个字段数据类型必须是 text！keyword 不分词！ analyzer = "ik_max_word"
-    @Field(type = FieldType.Text, analyzer = "ik_max_word")
+    //  es 中能分词的字段，这个字段数据类型必须是 text！keyword 不分词！
+    //  建索引时用 ik_max_word（拆得细，召回全），检索时用 ik_smart（拆得粗，结果准）
+    @Field(type = FieldType.Text, analyzer = "ik_max_word", searchAnalyzer = "ik_smart")
     private String albumTitle;
 
-    @Field(type = FieldType.Text, analyzer = "ik_max_word")
+    @Field(type = FieldType.Text, analyzer = "ik_max_word", searchAnalyzer = "ik_smart")
     private String albumIntro;
 
     @Field(type = FieldType.Keyword)

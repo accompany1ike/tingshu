@@ -6,6 +6,7 @@ import com.atguigu.tingshu.album.mapper.AlbumStatMapper;
 import com.atguigu.tingshu.album.mapper.BaseAttributeMapper;
 import com.atguigu.tingshu.album.mapper.BaseAttributeValueMapper;
 import com.atguigu.tingshu.album.mapper.BaseCategoryViewMapper;
+import com.atguigu.tingshu.album.mq.AlbumIndexMqSender;
 import com.atguigu.tingshu.album.service.AlbumInfoService;
 import com.atguigu.tingshu.common.constant.SystemConstant;
 import com.atguigu.tingshu.common.execption.GuiguException;
@@ -20,6 +21,8 @@ import com.atguigu.tingshu.query.album.AlbumInfoQuery;
 import com.atguigu.tingshu.vo.album.AlbumAttributeValueVo;
 import com.atguigu.tingshu.vo.album.AlbumInfoVo;
 import com.atguigu.tingshu.vo.album.AlbumListVo;
+import com.atguigu.tingshu.vo.album.AlbumStatMqVo;
+import com.atguigu.tingshu.vo.album.AlbumStatVo;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
@@ -31,9 +34,11 @@ import org.springframework.util.CollectionUtils;
 import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -74,6 +79,9 @@ public class AlbumInfoServiceImpl extends ServiceImpl<AlbumInfoMapper, AlbumInfo
 	@Autowired
 	private BaseAttributeValueMapper baseAttributeValueMapper;
 
+	@Autowired
+	private AlbumIndexMqSender albumIndexMqSender;
+
 
 	/**
 	 * 保存专辑（新增）
@@ -112,6 +120,9 @@ public class AlbumInfoServiceImpl extends ServiceImpl<AlbumInfoMapper, AlbumInfo
 		this.saveAlbumStat(albumId, SystemConstant.ALBUM_STAT_SUBSCRIBE);
 		this.saveAlbumStat(albumId, SystemConstant.ALBUM_STAT_BUY);
 		this.saveAlbumStat(albumId, SystemConstant.ALBUM_STAT_COMMENT);
+
+		//6.通知搜索模块建立索引（事务提交后发送，避免索引里查到的还是提交前的旧数据）
+		albumIndexMqSender.sendUpperAlbum(albumId);
 
 		return albumId;
 	}
@@ -270,7 +281,155 @@ public class AlbumInfoServiceImpl extends ServiceImpl<AlbumInfoMapper, AlbumInfo
 		albumStatMapper.delete(new LambdaQueryWrapper<AlbumStat>()
 				.eq(AlbumStat::getAlbumId, albumId));
 		log.info("删除专辑成功，专辑ID：{}，操作人：{}", albumId, userId);
+
+		//4.通知搜索模块删除索引：专辑都删了，搜索页不能再搜出来
+		albumIndexMqSender.sendLowerAlbum(albumId);
 	}
+
+
+	/**
+	 * 根据专辑ID查询专辑（服务内部调用）
+	 * <p>
+	 * 不做归属校验，专辑不存在时返回 null，由调用方（搜索模块）决定是删索引还是提示不存在
+	 *
+	 * @param albumId 专辑ID
+	 * @return 专辑信息（含标签集合，标签只带 attributeId 与 valueId）
+	 */
+	@Override
+	public AlbumInfo getAlbumInfoById(Long albumId) {
+		AlbumInfo albumInfo = albumInfoMapper.selectById(albumId);
+		if (albumInfo == null) {
+			return null;
+		}
+		//回填标签：搜索模块构建索引时要把标签写进 nested 字段，用于「按标签筛选」
+		albumInfo.setAlbumAttributeValueVoList(albumAttributeValueMapper.selectList(
+				new LambdaQueryWrapper<AlbumAttributeValue>()
+						.select(AlbumAttributeValue::getAlbumId, AlbumAttributeValue::getAttributeId, AlbumAttributeValue::getValueId)
+						.eq(AlbumAttributeValue::getAlbumId, albumId)
+						.orderByAsc(AlbumAttributeValue::getAttributeId)));
+		return albumInfo;
+	}
+
+
+	/**
+	 * 查询专辑统计信息（服务内部调用）
+	 *
+	 * @param albumId 专辑ID
+	 * @return 专辑统计信息，四项统计都查不到时各项为 0
+	 */
+	@Override
+	public AlbumStatVo getAlbumStatVo(Long albumId) {
+		AlbumStatVo albumStatVo = new AlbumStatVo();
+		albumStatVo.setAlbumId(albumId);
+		albumStatVo.setPlayStatNum(0);
+		albumStatVo.setSubscribeStatNum(0);
+		albumStatVo.setBuyStatNum(0);
+		albumStatVo.setCommentStatNum(0);
+
+		List<AlbumStat> albumStatList = albumStatMapper.selectList(new LambdaQueryWrapper<AlbumStat>()
+				.eq(AlbumStat::getAlbumId, albumId));
+		for (AlbumStat albumStat : albumStatList) {
+			if (albumStat.getStatType() == null) {
+				continue;
+			}
+			int statNum = albumStat.getStatNum() == null ? 0 : albumStat.getStatNum();
+			switch (albumStat.getStatType()) {
+				case SystemConstant.ALBUM_STAT_PLAY -> albumStatVo.setPlayStatNum(statNum);
+				case SystemConstant.ALBUM_STAT_SUBSCRIBE -> albumStatVo.setSubscribeStatNum(statNum);
+				case SystemConstant.ALBUM_STAT_BUY -> albumStatVo.setBuyStatNum(statNum);
+				case SystemConstant.ALBUM_STAT_COMMENT -> albumStatVo.setCommentStatNum(statNum);
+				default -> log.warn("未知的专辑统计类型：{}，专辑ID：{}", albumStat.getStatType(), albumId);
+			}
+		}
+		return albumStatVo;
+	}
+
+
+	/**
+	 * 查询全部专辑ID（服务内部调用）
+	 *
+	 * @return 专辑ID集合，按ID升序
+	 */
+	@Override
+	public List<Long> findAllAlbumIds() {
+		return albumInfoMapper.selectList(new LambdaQueryWrapper<AlbumInfo>()
+						.select(AlbumInfo::getId)
+						.orderByAsc(AlbumInfo::getId))
+				.stream().map(AlbumInfo::getId).collect(Collectors.toList());
+	}
+
+
+	/**
+	 * 根据专辑ID集合批量查询专辑（服务内部调用）
+	 * <p>
+	 * 入参可能来自用户填的一串 ID，先去重再去查，避免 in 条件里堆重复值；
+	 * 查不到的那几个直接不在结果里，调用方按「缺了就是没了」处理
+	 *
+	 * @param albumIdList 专辑ID集合
+	 * @return 专辑集合
+	 */
+	@Override
+	public List<AlbumInfo> findAlbumInfoByIds(List<Long> albumIdList) {
+		if (CollectionUtils.isEmpty(albumIdList)) {
+			return new ArrayList<>();
+		}
+		List<Long> distinctIds = albumIdList.stream()
+				.filter(Objects::nonNull)
+				.distinct()
+				.collect(Collectors.toList());
+		if (CollectionUtils.isEmpty(distinctIds)) {
+			return new ArrayList<>();
+		}
+		return albumInfoMapper.selectList(new LambdaQueryWrapper<AlbumInfo>()
+				.in(AlbumInfo::getId, distinctIds));
+	}
+
+
+	/**
+	 * 更新专辑统计信息（MQ 消费者调用）
+	 * <p>
+	 * 播放量、订阅量、购买量、评论数的变更都走这一个入口：
+	 * 先按「专辑ID + 统计类型」原子累加，影响行数为 0 说明这一行不存在（老数据或初始化遗漏），
+	 * 再补插一条，避免统计凭空丢失；
+	 * 最后通知搜索模块刷新索引里的统计值与热度，保证排行榜、综合排序用的是最新数字
+	 *
+	 * @param albumStatMqVo 统计变更消息（专辑ID、统计类型、增量）
+	 */
+	@Override
+	@Transactional(rollbackFor = Exception.class)
+	public void updateAlbumStat(AlbumStatMqVo albumStatMqVo) {
+		//1.校验：专辑ID与统计类型缺一不可，增量为 0 时无需更新
+		if (albumStatMqVo == null || albumStatMqVo.getAlbumId() == null
+				|| !StringUtils.hasText(albumStatMqVo.getStatType())) {
+			log.warn("专辑统计消息内容不完整，已忽略：{}", albumStatMqVo);
+			return;
+		}
+		int count = albumStatMqVo.getCount() == null ? 0 : albumStatMqVo.getCount();
+		if (count == 0) {
+			return;
+		}
+
+		//2.原子累加：并发下由数据库保证计数不丢
+		int rows = albumStatMapper.increaseStatNum(albumStatMqVo.getAlbumId(), albumStatMqVo.getStatType(), count);
+		if (rows > 0) {
+			log.info("专辑统计更新成功，专辑ID：{}，统计类型：{}，增量：{}",
+					albumStatMqVo.getAlbumId(), albumStatMqVo.getStatType(), count);
+		} else {
+			//3.统计行不存在时补插一条：直接按增量作为初始值
+			AlbumStat albumStat = new AlbumStat();
+			albumStat.setAlbumId(albumStatMqVo.getAlbumId());
+			albumStat.setStatType(albumStatMqVo.getStatType());
+			albumStat.setStatNum(count);
+			albumStatMapper.insert(albumStat);
+			log.warn("专辑统计行缺失，已补插，专辑ID：{}，统计类型：{}，初始值：{}",
+					albumStatMqVo.getAlbumId(), albumStatMqVo.getStatType(), count);
+		}
+
+		//4.通知搜索模块把索引里的统计值与热度刷新一遍
+		//  统计是榜单和综合排序的依据，只写库不刷索引的话，榜单会一直停在建索引那一刻的快照
+		albumIndexMqSender.sendAlbumStatToEs(albumStatMqVo.getAlbumId());
+	}
+
 
 	/**
 	 * 编辑专辑
@@ -326,6 +485,9 @@ public class AlbumInfoServiceImpl extends ServiceImpl<AlbumInfoMapper, AlbumInfo
 				.eq(AlbumAttributeValue::getAlbumId, albumId));
 		this.saveAlbumAttributeValue(albumId, categoryView.getCategory1Id(), albumInfoVo.getAlbumAttributeValueVoList());
 		log.info("编辑专辑成功，专辑ID：{}，操作人：{}", albumId, userId);
+
+		//5.通知搜索模块重建索引：标题、分类、标签都可能变了，索引里的数据要跟着换
+		albumIndexMqSender.sendUpperAlbum(albumId);
 	}
 
 	/**

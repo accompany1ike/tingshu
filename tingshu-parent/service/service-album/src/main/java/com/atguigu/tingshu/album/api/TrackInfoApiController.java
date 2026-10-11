@@ -7,8 +7,11 @@ import com.atguigu.tingshu.common.result.Result;
 import com.atguigu.tingshu.common.util.AuthContextHolder;
 import com.atguigu.tingshu.model.album.TrackInfo;
 import com.atguigu.tingshu.query.album.TrackInfoQuery;
+import com.atguigu.tingshu.vo.album.AlbumTrackListVo;
 import com.atguigu.tingshu.vo.album.TrackInfoVo;
 import com.atguigu.tingshu.vo.album.TrackListVo;
+import com.atguigu.tingshu.vo.album.TrackPaidSettingVo;
+import com.atguigu.tingshu.vo.album.TrackStatVo;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -25,6 +28,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.List;
 import java.util.Map;
 
 @Tag(name = "声音管理")
@@ -90,6 +94,22 @@ public class TrackInfoApiController {
 
 
 	/**
+	 * 根据声音ID集合批量查询声音（服务内部调用，用户模块的收藏/历史列表使用）
+	 * <p>
+	 * 不加登录校验、也不校验声音归属：列表页展示的是用户自己收藏或听过的声音，
+	 * 声音本身可能是别的主播上传的，按 getTrackInfo 的归属校验会全部查不出来
+	 *
+	 * @param trackIdList 声音ID集合
+	 * @return 声音集合
+	 */
+	@Operation(summary = "批量查询声音（服务内部调用）")
+	@PostMapping("/trackInfo/findTrackInfoByIds")
+	public Result<List<TrackInfo>> findTrackInfoByIds(@RequestBody List<Long> trackIdList) {
+		return Result.ok(trackInfoService.findTrackInfoByIds(trackIdList));
+	}
+
+
+	/**
 	 * 编辑声音
 	 * <p>
 	 * 只能修改自己的声音；重新上传音频时媒体信息一起更新，未提交的字段保持库中原值
@@ -144,6 +164,61 @@ public class TrackInfoApiController {
 		Long userId = AuthContextHolder.getUserId();
 		Page<TrackListVo> pageInfo = trackInfoService.findUserTrackPage(page, limit, userId, trackInfoQuery);
 		return Result.ok(pageInfo);
+	}
+
+
+	/**
+	 * 根据专辑ID分页查询声音列表（专辑详情页用）
+	 * <p>
+	 * 未登录也能浏览专辑详情，所以这里不强制登录（required=false）：未登录时拿不到 userId，
+	 * 付费标识按"非VIP、未购买"处理。每条声音是否显示付费标识由服务端算好，前端只看 isShowPaidMark
+	 *
+	 * @param albumId 专辑ID
+	 * @param page    页码
+	 * @param limit   每页条数
+	 * @return 分页结果，records 为声音列表（含付费标识）
+	 */
+	@Operation(summary = "根据专辑ID查询声音分页列表")
+	@GuiGuLogin(required = false)
+	@GetMapping("/trackInfo/findAlbumTrackPage/{albumId}/{page}/{limit}")
+	public Result<Page<AlbumTrackListVo>> findAlbumTrackPage(@PathVariable Long albumId,
+															 @PathVariable int page,
+															 @PathVariable int limit) {
+		Long userId = AuthContextHolder.getUserId();
+		Page<AlbumTrackListVo> pageInfo = trackInfoService.findAlbumTrackPage(albumId, page, limit, userId);
+		return Result.ok(pageInfo);
+	}
+
+
+	/**
+	 * 查询声音统计信息（播放页用）
+	 * <p>
+	 * 播放量、收藏量、点赞量、评论数都是公开数据，不强制登录
+	 *
+	 * @param trackId 声音ID
+	 * @return 声音统计信息
+	 */
+	@Operation(summary = "查询声音统计信息")
+	@GuiGuLogin(required = false)
+	@GetMapping("/trackInfo/getTrackStatVo/{trackId}")
+	public Result<TrackStatVo> getTrackStatVo(@PathVariable Long trackId) {
+		return Result.ok(trackInfoService.getTrackStatVo(trackId));
+	}
+
+
+	/**
+	 * 查询某个声音的购买选项（详情页「购买本集」弹窗用）
+	 * <p>
+	 * 弹窗要展示两种买法的价格，属于公开的定价信息，不强制登录
+	 *
+	 * @param trackId 声音ID
+	 * @return 购买选项列表（单集购买 / 整专辑购买）
+	 */
+	@Operation(summary = "查询声音购买选项")
+	@GuiGuLogin(required = false)
+	@GetMapping("/trackInfo/findUserTrackPaidList/{trackId}")
+	public Result<List<TrackPaidSettingVo>> findUserTrackPaidList(@PathVariable Long trackId) {
+		return Result.ok(trackInfoService.findUserTrackPaidList(trackId));
 	}
 
 }

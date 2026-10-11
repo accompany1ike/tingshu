@@ -38,4 +38,15 @@ public interface UserInfoService extends IService<UserInfo> {
      */
     void updateUserInfo(Long userId, UserInfoVo userInfoVo);
 
+
+    /**
+     * 判断用户是否为有效VIP会员（服务内部调用）
+     * <p>
+     * 专辑模块渲染声音列表时用它决定 VIP 专辑要不要显示付费标识
+     *
+     * @param userId 用户ID，未登录时传 null
+     * @return true-有效VIP；用户不存在、非VIP、或会员已过期都返回 false
+     */
+    Boolean getUserIsVip(Long userId);
+
 }

@@ -26,8 +26,10 @@ public class RedisConstant {
 
     //订单防重流水号前缀
     public static final String ORDER_TRADE_NO_PREFIX = "user:trade:";
-    //订单流水号有效期
-    public static final int ORDER_TRADE_EXPIRE = 5;
+    //订单流水号有效期：单位秒。
+    //取值要盖住「用户重复点击」的时间窗，第一次提交若落库慢，用户可能隔十几秒再点一次，所以不能太短；
+    //又因为提交失败时会主动释放标记，取长一点不会误伤正常重试，这里定 60 秒
+    public static final int ORDER_TRADE_EXPIRE = 60;
 
 
     //单位：秒

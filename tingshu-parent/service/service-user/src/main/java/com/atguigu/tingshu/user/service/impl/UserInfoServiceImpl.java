@@ -3,6 +3,7 @@ package com.atguigu.tingshu.user.service.impl;
 import cn.binarywang.wx.miniapp.api.WxMaService;
 import cn.binarywang.wx.miniapp.bean.WxMaJscode2SessionResult;
 import cn.hutool.core.bean.BeanUtil;
+import com.atguigu.tingshu.account.AccountFeignClient;
 import com.atguigu.tingshu.common.constant.RedisConstant;
 import com.atguigu.tingshu.common.constant.SystemConstant;
 import com.atguigu.tingshu.common.execption.GuiguException;
@@ -23,6 +24,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
@@ -49,11 +51,19 @@ public class UserInfoServiceImpl extends ServiceImpl<UserInfoMapper, UserInfo> i
 	private static final int NICKNAME_MAX_LENGTH = 100;
 	private static final int AVATAR_URL_MAX_LENGTH = 500;
 
+	/**
+	 * user_info.is_vip 的取值：1-是VIP会员 0-普通用户
+	 */
+	private static final Integer VIP_FLAG_YES = 1;
+
 	@Autowired
 	private UserInfoMapper userInfoMapper;
 
 	@Autowired
 	private WxMaService wxMaService;
+
+	@Autowired
+	private AccountFeignClient accountFeignClient;
 
 	@Autowired
 	private RedisTemplate redisTemplate;
@@ -139,6 +149,29 @@ public class UserInfoServiceImpl extends ServiceImpl<UserInfoMapper, UserInfo> i
 	}
 
 	/**
+	 * 判断用户是否为有效VIP会员
+	 * <p>
+	 * is_vip 只是开通标记，还得看 vip_expire_time 有没有过期，两个条件都满足才算有效VIP。
+	 * 到期时间为空按"长期有效"处理：历史数据里可能只有标记没有到期时间，
+	 * 不能因为缺一个时间字段就把已开通的用户判成普通用户。
+	 *
+	 * @param userId 用户ID，未登录时传 null
+	 * @return true-有效VIP
+	 */
+	@Override
+	public Boolean getUserIsVip(Long userId) {
+		if (userId == null) {
+			return false;
+		}
+		UserInfo userInfo = userInfoMapper.selectById(userId);
+		if (userInfo == null || !VIP_FLAG_YES.equals(userInfo.getIsVip())) {
+			return false;
+		}
+		Date vipExpireTime = userInfo.getVipExpireTime();
+		return vipExpireTime == null || vipExpireTime.after(new Date());
+	}
+
+	/**
 	 * 用微信登录凭证换取openid
 	 *
 	 * @param code 微信登录凭证
@@ -200,6 +233,8 @@ public class UserInfoServiceImpl extends ServiceImpl<UserInfoMapper, UserInfo> i
 		userInfo.setStatus(SystemConstant.USER_STATUS_NORMAL);
 		userInfoMapper.insert(userInfo);
 		log.info("微信登录自动注册新用户，用户ID：{}，openid：{}", userInfo.getId(), openid);
+		//同步开户，余额从0开始；账户服务不可用时走降级只记日志，不影响注册
+		accountFeignClient.initUserAccount(userInfo.getId());
 		return userInfo;
 	}
 

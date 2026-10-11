@@ -35,6 +35,14 @@ public class MqConst {
     public static final String EXCHANGE_CANCEL_ORDER = "tingshu.cancel.order";
     public static final String ROUTING_CANCEL_ORDER = "tingshu.cancel.order";
     public static final String QUEUE_CANCEL_ORDER = "tingshu.cancel.order";
+    /**
+     * 取消订单的延迟中转队列
+     * <p>
+     * 消息先进这个队列等 TTL 到期，过期后由死信路由转到 QUEUE_CANCEL_ORDER。
+     * 用 TTL + 死信而不是 x-delayed-message 插件：插件不一定装了，
+     * 而声明一个 x-delayed-message 交换机时如果服务端没有该插件，应用会直接起不来
+     */
+    public static final String QUEUE_CANCEL_ORDER_DELAY = "tingshu.cancel.order.delay";
 //    public static final Integer CANCEL_ORDER_DELAY_TIME = 15 * 60;
     public static final Integer CANCEL_ORDER_DELAY_TIME = 10;
 

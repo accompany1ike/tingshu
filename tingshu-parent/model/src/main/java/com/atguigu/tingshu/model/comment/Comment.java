@@ -52,4 +52,12 @@ public class Comment {
 	@Schema(description = "回复评论列表")
 	@Transient //被该注解标注的，将不会被录入到数据库中。只作为普通的javaBean属性
 	private List<Comment> replyCommentList;
+
+	@Schema(description = "当前登录用户是否可以删除该评论：1-可删除")
+	@Transient
+	private String deleteMark;
+
+	@Schema(description = "被回复的评论，二级回复用它显示「回复 xxx」")
+	@Transient
+	private Comment parent;
 }
